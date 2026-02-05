@@ -12,7 +12,11 @@ import SwiftData
 struct HandoffApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            WorkoutSession.self,
+            ExerciseLog.self,
+            SetLog.self,
+            RoutineTemplate.self,
+            RoutineExercise.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
