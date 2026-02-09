@@ -3,6 +3,11 @@ import SwiftData
 import Combine
 
 struct WorkoutSessionView: View {
+    private enum SessionMode {
+        case workout
+        case rest
+    }
+
     @Environment(\.modelContext) private var modelContext
     
     let session: WorkoutSession
@@ -17,6 +22,7 @@ struct WorkoutSessionView: View {
     @State private var restRemainingSeconds = 0
     @State private var isAdjustSheetPresented = false
     @State private var didPrepareAutofill = false
+    @State private var sessionMode: SessionMode = .workout
     
     // Timer
     private let restDurationSeconds = 90
@@ -55,46 +61,26 @@ struct WorkoutSessionView: View {
             }
             .padding(.top, 10)
             
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
-                    // 1. AI Suggestion / Current Target
-                    suggestionCard
-                    
-                    // 2. Rest Timer (if active)
-                    if restRemainingSeconds > 0 {
-                        restTimerView
-                    }
-                    
-                    // 3. History
-                    if !orderedSets.isEmpty {
-                        historyView
+            if sessionMode == .workout {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        // 1. AI Suggestion / Current Target
+                        suggestionCard
+                        
+                        // 2. History
+                        if !orderedSets.isEmpty {
+                            historyView
+                        }
                     }
                 }
-            }
-            
-            Spacer()
-            
-            // Bottom Action Area
-            VStack(spacing: 12) {
-                Button(action: completeSet) {
-                    Text("Complete Set")
-                        .font(Theme.Fonts.headline(20))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
-                        .background(Theme.accent)
-                        .foregroundStyle(Theme.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                }
-                .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded(adjustWithSwipe))
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.6).onEnded { _ in
-                        isAdjustSheetPresented = true
-                    }
-                )
                 
-                Text("Swipe to Adjust • Hold for RPE")
-                    .font(Theme.Fonts.body(12))
-                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+                
+                workoutActionArea
+            } else {
+                Spacer()
+                restModeArea
+                Spacer()
             }
         }
         .padding(Theme.Layout.padding)
@@ -161,31 +147,56 @@ struct WorkoutSessionView: View {
     }
     
     private var restTimerView: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Resting")
-                    .font(Theme.Fonts.headline(16))
-                    .foregroundStyle(Theme.textSecondary)
-                Text("\(restRemainingSeconds)s")
-                    .font(Theme.Fonts.number(32))
-                    .foregroundStyle(Theme.secondaryAccent)
-            }
-            
-            Spacer()
-            
-            // Simple visual bar
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Theme.surface)
-                    .frame(width: 120, height: 8)
-                
-                Capsule()
-                    .fill(Theme.secondaryAccent)
-                    .frame(width: 120 * (Double(restRemainingSeconds) / Double(restDurationSeconds)), height: 8)
-            }
+        VStack(spacing: 8) {
+            Text("휴식 타이머")
+                .font(Theme.Fonts.headline(16))
+                .foregroundStyle(Theme.textSecondary)
+            Text("\(restRemainingSeconds)s")
+                .font(Theme.Fonts.number(56))
+                .foregroundStyle(Theme.secondaryAccent)
         }
         .padding(20)
         .premiumCard()
+    }
+
+    private var workoutActionArea: some View {
+        VStack(spacing: 12) {
+            Button(action: completeSet) {
+                Text("Complete Set")
+                    .font(Theme.Fonts.headline(20))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background(Theme.accent)
+                    .foregroundStyle(Theme.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+            .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded(adjustWithSwipe))
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+                    isAdjustSheetPresented = true
+                }
+            )
+
+            Text("Swipe to Adjust • Hold for RPE")
+                .font(Theme.Fonts.body(12))
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private var restModeArea: some View {
+        VStack(spacing: 20) {
+            restTimerView
+
+            Button(action: startNewSet) {
+                Text("새 세트 시작")
+                    .font(Theme.Fonts.headline(20))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background(Theme.secondaryAccent)
+                    .foregroundStyle(Theme.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+        }
     }
     
     private var historyView: some View {
@@ -273,6 +284,7 @@ struct WorkoutSessionView: View {
     // MARK: - Logic Methods
     
     private func completeSet() {
+        guard sessionMode == .workout else { return }
         guard let currentExercise else { return }
         
         let setLog = SetLog(
@@ -294,6 +306,13 @@ struct WorkoutSessionView: View {
     private func startRestTimer() {
         restEndsAt = Date().addingTimeInterval(Double(restDurationSeconds))
         restRemainingSeconds = restDurationSeconds
+        sessionMode = .rest
+    }
+
+    private func startNewSet() {
+        restEndsAt = nil
+        restRemainingSeconds = 0
+        sessionMode = .workout
     }
     
     private func tickRestTimer() {
